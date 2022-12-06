@@ -3,9 +3,13 @@ import random
 import numpy as np
 from time import sleep
 import math
+from SuperNN import MyNNet
 
 class Space_Ship_Enviroment:
     def __init__(self):
+
+        self.Net = MyNNet([4 + 8 * 2 + 4 + 1, 100, 5], ['relu', 'sigmoid'])
+        self.Net.set_weights_vector(self.read_weights('best run and shoot 2.txt'))
         # FPS 1000/turn_delay
         self.turn_delay = 10
 
@@ -39,7 +43,7 @@ class Space_Ship_Enviroment:
         self.kill_komet_k = 3
 
         # Базовое количество ботов
-        self.number_of_bots = 1
+        self.number_of_bots = 5
 
         self.bots_remain = self.number_of_bots
 
@@ -57,10 +61,11 @@ class Space_Ship_Enviroment:
         return self.norm(self.observe()[0]), self.reward()[0], not self.is_running, 0
 
     def observe(self):
-        observation = []
-        for bot in self.objects_in_game['bots']:
-            observation.append(self.bot_observe(bot))
-        return observation
+        # observation = []
+        # for bot in self.objects_in_game['bots']:
+        #     observation.append(self.bot_observe(bot))
+        # return observation
+        return [self.bot_observe(self.objects_in_game['bots'][0])]
 
     def reward(self):
         res = []
@@ -68,7 +73,7 @@ class Space_Ship_Enviroment:
             life_time=obj.life_turn
             znach=obj.size*5+life_time-obj.dead*10
             # res.append(znach)
-            res.append(self.timestamp)
+            res.append(self.timestamp + (obj.size - self.person_defolt) * 5)
         return res
 
     def reset(self):
@@ -85,15 +90,17 @@ class Space_Ship_Enviroment:
 
     def render(self):
         self.display()
-        
+
     def display(self):
         for i in self.objects_in_game['comets']:
             pygame.draw.rect(self.win, i.color, (i.x, i.y, i.size, i.size))
         for i in self.objects_in_game['bots']:
+            if i.dead or i.is_dead_f():
+                continue
             pygame.draw.rect(self.win, i.color, (i.x, i.y, i.size, i.size))
         for i in self.objects_in_game['boolets']:
             pygame.draw.rect(self.win, i.color, (i.x, i.y, i.size, i.size))
-        pygame.display.update()# Обновляме изображение
+        pygame.display.update() # Обновляме изображение
         for event in pygame.event.get(): #реакция на закрытие окна
             if event.type == pygame.QUIT:
                 exit()
@@ -102,7 +109,7 @@ class Space_Ship_Enviroment:
         pass
 
     def spawn_comet(self):
-        if random.uniform(0, 1) < 0.98:
+        if random.uniform(0, 1) < 0.95:
             return
         wall = random.choice(['UP','DOWN','LEFT','RIGHT'])
         fullspeed = self.speed_comet * random.randint(1, 3)
@@ -141,7 +148,7 @@ class Space_Ship_Enviroment:
                 i.turn_till_last_shoot = 0
             i.x, i.y, i.face, i.dead = self.action_object(i, comand_bot_i)
             i.turn_till_last_shoot += 1
-        if bots_remain <= 0 or self.timestamp >= 10000:
+        if bots_remain <= 1 or self.timestamp >= 10000:
             self.is_running = False
         for i in range(len(self.objects_in_game['boolets'])):
             if not self.objects_in_game['boolets'][i].is_dead_f():
@@ -253,7 +260,7 @@ class Space_Ship_Enviroment:
                 elif i.type_ob == 'bot':
                     for k in self.objects_in_game['bots']:
                         if k.name == j.parent:
-                            k.size += i.size // 2
+                            k.size += i.size // 8
                 i.dead = 1
                 j.dead = 1
 
@@ -299,7 +306,17 @@ class Space_Ship_Enviroment:
                 return 0
         return 1
 
-    def bot_observe(self, bot):
+    def bot_observe(self, bot, show_lines=True):
+        def direction():
+            if bot.face == 'LEFT':
+                return [1, 0, 0, 0]
+            if bot.face == 'RIGHT':
+                return [0, 1, 0, 0]
+            if bot.face == 'UP':
+                return [0, 0, 1, 0]
+            if bot.face == 'DOWN':
+                return [0, 0, 0, 1]
+
         def is_under_line(k, b, xy):
             return k*xy[0] + b < xy[1]
 
@@ -340,7 +357,7 @@ class Space_Ship_Enviroment:
             c_y = bot.y + bot.size / 2
             b1 = c_y - k1 * c_x
             pygame.draw.line(self.win, ((255, 255, 255), (255, 0, 255))[bool(is2)], (c_x, c_y), (1000, 1000 * k1 + b1), 2)
-            pygame.draw.line(self.win, ((255, 255, 255), (255, 255, 0))[bool(is1)], (0, b1), (c_x, c_y), 2)
+            pygame.draw.line(self.win, ((255, 255, 255), (255, 0, 255))[bool(is1)], (0, b1), (c_x, c_y), 2)
 
         def check_sensors(obj, sens_data, sens_angle, binary):
             assert len(sens_data) == len(sens_angle) * 2
@@ -366,55 +383,45 @@ class Space_Ship_Enviroment:
                           ]
         obs = [self.width_win-bot.x, bot.x, self.heigth_win-bot.y, bot.y]
         comets = [0 for _ in range(len(sensors_angles) * 2)]
-        draw = [0, 0, 0, 0]
+        bots = [0 for _ in range(len(sensors_angles) * 2)]
         for i in self.objects_in_game['bots']:
             if (i.name==bot.name):
                 continue
             a, b = sensor(i, 0)
             if a:
                 obs[0] = max(obs[0], a)
-                draw[0] = 1
             if b:
                 obs[1] = max(obs[1], b)
-                draw[1] = 1
 
             a, b = sensor(i, 99 * math.pi / 200)
             if a:
                 obs[2] = max(obs[2], a)
-                draw[2] = 1
             if b:
                 obs[3] = max(obs[3], b)
-                draw[3] = 1
+            check_sensors(i, bots, sensors_angles, binary=True)
 
         for i in self.objects_in_game['boolets']:
-            if (i.name==bot.name):
+            if bot.name == i.parent:
                 continue
-
-            if not is_cross(i, 0, bot.y):
-                if (bot.x < i.x):
-                    obs[0] = min(obs[0], abs(bot.x - i.x))
-                else:
-                    obs[1] = min(obs[1], abs(bot.x - i.x))
-
-            if not is_cross(i, 20, bot.y):
-                if (bot.y < i.y):
-                    obs[2] = min(obs[2], ((bot.x - i.x) ** 2 + (bot.y - i.y) ** 2) ** 0.5)
-                else:
-                    obs[3] = min(obs[3], ((bot.x - i.x) ** 2 + (bot.y - i.y) ** 2) ** 0.5)
+            check_sensors(i, comets, sensors_angles, binary=False)
 
         for i in self.objects_in_game['comets']:
             check_sensors(i, comets, sensors_angles, binary=False)
 
-        for i in range(len(sensors_angles)):
-            draw_line(sensors_angles[i], comets[2 * i], comets[2 * i + 1])
-
-        return obs + comets
+        if show_lines:
+            for i in range(len(sensors_angles)):
+                draw_line(sensors_angles[i], comets[2 * i], comets[2 * i + 1])
+            return obs + comets + bots + direction() + [bot.speed]
+        return obs + comets + direction() + [bot.speed]
 
     def pars_control(self, action):
         act = ('UP','DOWN','LEFT','RIGHT', 'SHOOT')[action]
         list = [act]
-        for i in range(self.number_of_bots - 1):
-            list.append(random.choice(['UP', 'DOWN', 'LEFT', 'RIGHT']))
+        # for i in range(self.number_of_bots - 1):
+        #     list.append(random.choice(['UP', 'DOWN', 'LEFT', 'RIGHT', 'SHOOT']))
+        for i in range(1, len(self.objects_in_game['bots'])):
+            cho = np.argmax(self.Net.forward([self.bot_observe(self.objects_in_game['bots'][i], show_lines=False)])[0][0])
+            list.append(('UP','DOWN','LEFT','RIGHT', 'SHOOT')[cho])
         return list
 
     def norm(self, x):
@@ -423,6 +430,18 @@ class Space_Ship_Enviroment:
         for i in range(len(x)):
             y[i] = x[i] / n
         return y
+
+    def read_weights(self, filename):
+        data = []
+        with open(filename, 'r') as fp:
+            for line in fp:
+                # remove linebreak from a current name
+                # linebreak is the last character of each line
+                x = line[:-1]
+
+                # add current item to the list
+                data.append(float(x))
+        return data
 
 class game_object:
     def __init__(self,position_x,position_y,size,speed,color,type_ob,parent='defolt',name='defoult',face='UP', dead=0):
