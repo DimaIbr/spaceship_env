@@ -2,6 +2,7 @@ import pygame
 import random
 import numpy as np
 from time import sleep
+import math
 
 class Space_Ship_Enviroment:
     def __init__(self):
@@ -38,12 +39,10 @@ class Space_Ship_Enviroment:
         self.kill_komet_k = 3
 
         # Базовое количество ботов
-        self.number_of_bots = 6
+        self.number_of_bots = 1
 
         self.bots_remain = self.number_of_bots
 
-        self.win = pygame.display.set_mode((self.width_win, self.heigth_win))
-        pygame.display.set_caption("Space ships")  # Исправить потом
 
         self.reset()
 
@@ -55,7 +54,7 @@ class Space_Ship_Enviroment:
         self.action_in_game(control)
         self.del_collision_objects()
         self.del_dead_objects()
-        return self.observe()[0], self.reward()[0], self.is_running, 0
+        return self.norm(self.observe()[0]), self.reward()[0], not self.is_running, 0
 
     def observe(self):
         observation = []
@@ -68,10 +67,13 @@ class Space_Ship_Enviroment:
         for obj in self.objects_in_game['bots']:
             life_time=obj.life_turn
             znach=obj.size*5+life_time-obj.dead*10
-            res.append(znach)
+            # res.append(znach)
+            res.append(self.timestamp)
         return res
 
     def reset(self):
+        self.win = pygame.display.set_mode((self.width_win, self.heigth_win))
+        pygame.display.set_caption("Space ships")  # Исправить потом
         self.objects_in_game = {'comets': [],
                                 'bots': [],
                                 'boolets': []}
@@ -81,6 +83,9 @@ class Space_Ship_Enviroment:
         self.spawn_bots(self.number_of_bots)
         return self.observe()[0]
 
+    def render(self):
+        self.display()
+        
     def display(self):
         for i in self.objects_in_game['comets']:
             pygame.draw.rect(self.win, i.color, (i.x, i.y, i.size, i.size))
@@ -92,6 +97,7 @@ class Space_Ship_Enviroment:
         for event in pygame.event.get(): #реакция на закрытие окна
             if event.type == pygame.QUIT:
                 exit()
+
     def close(self):
         pass
 
@@ -124,13 +130,18 @@ class Space_Ship_Enviroment:
             game_object(x, y, self.comet_size, [speed_comet_x, speed_comet_y], (192, 192, 192), 'comet'))
 
     def action_in_game(self, control):
+        bots_remain = 0
         for i in self.objects_in_game['bots']:
+            if not i.dead:
+                bots_remain += 1
+            elif i.name == '0':
+                self.is_running = False
             comand_bot_i = control[int(i.name)]
             if comand_bot_i == 'SHOOT':
                 i.turn_till_last_shoot = 0
             i.x, i.y, i.face, i.dead = self.action_object(i, comand_bot_i)
             i.turn_till_last_shoot += 1
-        if len(self.objects_in_game['bots']) <= 0 or self.timestamp >= 10000:
+        if bots_remain <= 0 or self.timestamp >= 10000:
             self.is_running = False
         for i in range(len(self.objects_in_game['boolets'])):
             if not self.objects_in_game['boolets'][i].is_dead_f():
@@ -211,6 +222,9 @@ class Space_Ship_Enviroment:
             self.check_collision(i)
 
     def check_collision(self, i):
+        if i.x < 0 or i.y < 0 or i.x + i.size > self.width_win or i.y + i.size > self.heigth_win:
+            i.dead = 1
+            pass
         for j in self.objects_in_game['comets']:
             if i != j and ((i.x + i.size >= j.x and i.x <= j.x) and (i.y + i.size >= j.y and i.y <= j.y) or (
                     i.x + i.size >= j.x and i.x <= j.x and i.y + i.size >= j.y + j.size and i.y <= j.y + j.size)) and i.x > 0 and i.y > 0:
@@ -219,9 +233,11 @@ class Space_Ship_Enviroment:
         for j in self.objects_in_game['bots']:
             if i.type_ob == 'boolet':
                 continue
-
-            if i != j and ((i.x + i.size >= j.x and i.x <= j.x) and (i.y + i.size >= j.y and i.y <= j.y) or (
-                    i.x + i.size >= j.x and i.x <= j.x and i.y + i.size >= j.y + j.size and i.y <= j.y + j.size)) and i.x > 0 and i.y > 0:
+            if i != j and (
+                    (i.x + i.size >= j.x and i.x <= j.x) and (i.y + i.size >= j.y and i.y <= j.y) or
+                    (i.x + i.size >= j.x and i.x <= j.x and i.y + i.size >= j.y + j.size and i.y <= j.y + j.size)
+                          ) \
+                    and i.x > 0 and i.y > 0:
                 i.dead = 1
                 j.dead = 1
         for j in self.objects_in_game['boolets']:
@@ -246,16 +262,18 @@ class Space_Ship_Enviroment:
             if i.is_dead_f() or i.dead:
                 self.objects_in_game['comets'].pop(self.objects_in_game['comets'].index(i))
         for i in self.objects_in_game['bots']:
-            if i.is_dead_f() or i.dead:
-                self.dead_bots[i.name] = self.objects_in_game['bots'].pop(self.objects_in_game['bots'].index(i))
-            else:
+            if not i.is_dead_f() and not i.dead:
                 i.life_turn += 1
         for i in self.objects_in_game['boolets']:
             if i.is_dead_f() or i.dead:
                 self.objects_in_game['boolets'].pop(self.objects_in_game['boolets'].index(i))
 
     def spawn_bots(self, number):
-        for i in range(number):
+        self.objects_in_game['bots'].append(
+            game_object(self.width_win / 2, self.width_win / 2, self.person_size, self.speed_move,
+                        (255, 255, 255), 'bot', name=str(0))
+        )
+        for i in range(1, number):
             while True:
                 x = random.randint(5, self.width_win - self.person_size - 5)
                 y = random.randint(5, self.heigth_win - self.person_size - 5)
@@ -296,27 +314,77 @@ class Space_Ship_Enviroment:
             a4 = is_under_line(k, b, rightdown)
             return (a1 == a2) and (a2 == a3) and (a3 == a4)
 
+        def sensor(i, alpha):
+            k = math.tan(alpha)
+            c_x = bot.x + bot.size / 2
+            c_y = bot.y + bot.size / 2
+            b = c_y - k * c_x
+            obs = 0
+            if not is_cross(i, k, b):
+                obs = math.sqrt((bot.x - i.x) ** 2 + (bot.y - i.y) ** 2)
+
+            if alpha > math.pi / 4 and alpha < 3 * math.pi / 4:
+                if (bot.y < i.y):
+                    return 0, obs
+                else:
+                    return obs, 0
+            else:
+                if (bot.x < i.x):
+                    return 0, obs
+                else:
+                    return obs, 0
+
+        def draw_line(alpha, is1, is2):
+            k1 = math.tan(alpha)
+            c_x = bot.x + bot.size / 2
+            c_y = bot.y + bot.size / 2
+            b1 = c_y - k1 * c_x
+            pygame.draw.line(self.win, ((255, 255, 255), (255, 0, 255))[bool(is2)], (c_x, c_y), (1000, 1000 * k1 + b1), 2)
+            pygame.draw.line(self.win, ((255, 255, 255), (255, 255, 0))[bool(is1)], (0, b1), (c_x, c_y), 2)
+
+        def check_sensors(obj, sens_data, sens_angle, binary):
+            assert len(sens_data) == len(sens_angle) * 2
+            for i in range(len(sens_angle)):
+                a, b = sensor(obj, sens_angle[i])
+                if binary:
+                    if a: sens_data[2 * i] = 1
+                    if b: sens_data[2 * i + 1] = 1
+                else:
+                    if a: sens_data[2 * i] = max(sens_data[2 * i], a)
+                    if b: sens_data[2 * i + 1] = max(sens_data[2 * i + 1], b)
+
+        sensors_angles = [
+                          0,
+                          99 * math.pi / 200,
+                          math.pi / 4,
+                          3 * math.pi / 4,
+
+                          math.pi / 8,
+                          3 * math.pi / 8,
+                          5 * math.pi / 8,
+                          7 * math.pi / 8
+                          ]
         obs = [self.width_win-bot.x, bot.x, self.heigth_win-bot.y, bot.y]
+        comets = [0 for _ in range(len(sensors_angles) * 2)]
         draw = [0, 0, 0, 0]
         for i in self.objects_in_game['bots']:
             if (i.name==bot.name):
                 continue
+            a, b = sensor(i, 0)
+            if a:
+                obs[0] = max(obs[0], a)
+                draw[0] = 1
+            if b:
+                obs[1] = max(obs[1], b)
+                draw[1] = 1
 
-            if not is_cross(i, 0, bot.y):
-                if (bot.x < i.x):
-                    obs[0] = min(obs[0], abs(bot.x - i.x))
-                    draw[0] = 1
-                else:
-                    obs[1] = min(obs[1], abs(bot.x - i.x))
-                    draw[1] = 1
-            b1 = bot.y - 20 * bot.x
-            if not is_cross(i, 20, b1):
-                if (bot.y < i.y):
-                    obs[2] = min(obs[2], ((bot.x - i.x) ** 2 + (bot.y - i.y) ** 2) ** 0.5)
-                    draw[2] = 1
-                else:
-                    obs[3] = min(obs[3], ((bot.x - i.x) ** 2 + (bot.y - i.y) ** 2) ** 0.5)
-                    draw[3] = 1
+            a, b = sensor(i, 99 * math.pi / 200)
+            if a:
+                obs[2] = max(obs[2], a)
+                draw[2] = 1
+            if b:
+                obs[3] = max(obs[3], b)
+                draw[3] = 1
 
         for i in self.objects_in_game['boolets']:
             if (i.name==bot.name):
@@ -335,35 +403,26 @@ class Space_Ship_Enviroment:
                     obs[3] = min(obs[3], ((bot.x - i.x) ** 2 + (bot.y - i.y) ** 2) ** 0.5)
 
         for i in self.objects_in_game['comets']:
-            if (i.name==bot.name):
-                continue
+            check_sensors(i, comets, sensors_angles, binary=False)
 
-            if not is_cross(i, 0, bot.y):
-                if (bot.x < i.x):
-                    obs[0] = min(obs[0], abs(bot.x - i.x))
-                else:
-                    obs[1] = min(obs[1], abs(bot.x - i.x))
+        for i in range(len(sensors_angles)):
+            draw_line(sensors_angles[i], comets[2 * i], comets[2 * i + 1])
 
-
-            if not is_cross(i, 20, bot.y):
-                if (bot.y < i.y):
-                    obs[2] = min(obs[2], ((bot.x - i.x) ** 2 + (bot.y - i.y) ** 2) ** 0.5)
-                else:
-                    obs[3] = min(obs[3], ((bot.x - i.x) ** 2 + (bot.y - i.y) ** 2) ** 0.5)
-
-        pygame.draw.line(self.win, ((255, 255, 255), (0, 255, 255))[draw[0]], (bot.x, bot.y), (1000, bot.y), 2)
-        pygame.draw.line(self.win, ((255, 255, 255), (0, 255, 255))[draw[1]], (0, bot.y), (bot.x, bot.y), 2)
-        b1 = bot.y - 20 * bot.x
-        pygame.draw.line(self.win, ((255, 255, 255), (0, 255, 255))[draw[2]], (bot.x, bot.y), (1000, 1000 * 20 + b1), 2)
-        pygame.draw.line(self.win, ((255, 255, 255), (0, 255, 255))[draw[3]], (0, b1), (bot.x, bot.y), 2)
-
-        return obs
+        return obs + comets
 
     def pars_control(self, action):
-        act = ('UP','DOWN','LEFT','RIGHT', 'SHOOT')[np.argmax(action)]
-        return [act for _ in range(self.number_of_bots)]
+        act = ('UP','DOWN','LEFT','RIGHT', 'SHOOT')[action]
+        list = [act]
+        for i in range(self.number_of_bots - 1):
+            list.append(random.choice(['UP', 'DOWN', 'LEFT', 'RIGHT']))
+        return list
 
-
+    def norm(self, x):
+        y = x.copy()
+        n = max(x)
+        for i in range(len(x)):
+            y[i] = x[i] / n
+        return y
 
 class game_object:
     def __init__(self,position_x,position_y,size,speed,color,type_ob,parent='defolt',name='defoult',face='UP', dead=0):
