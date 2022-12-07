@@ -43,7 +43,7 @@ class Space_Ship_Enviroment:
         self.kill_komet_k = 3
 
         # Базовое количество ботов
-        self.number_of_bots = 5
+        self.number_of_bots = 8
 
         self.bots_remain = self.number_of_bots
 
@@ -417,11 +417,11 @@ class Space_Ship_Enviroment:
     def pars_control(self, action):
         act = ('UP','DOWN','LEFT','RIGHT', 'SHOOT')[action]
         list = [act]
-        # for i in range(self.number_of_bots - 1):
-        #     list.append(random.choice(['UP', 'DOWN', 'LEFT', 'RIGHT', 'SHOOT']))
-        for i in range(1, len(self.objects_in_game['bots'])):
-            cho = np.argmax(self.Net.forward([self.bot_observe(self.objects_in_game['bots'][i], show_lines=False)])[0][0])
-            list.append(('UP','DOWN','LEFT','RIGHT', 'SHOOT')[cho])
+        for i in range(self.number_of_bots - 1):
+            list.append(random.choice(['UP', 'DOWN', 'LEFT', 'RIGHT', 'SHOOT']))
+        # for i in range(1, len(self.objects_in_game['bots'])):
+        #     cho = np.argmax(self.Net.forward([self.bot_observe(self.objects_in_game['bots'][i], show_lines=False)])[0][0])
+        #     list.append(('UP','DOWN','LEFT','RIGHT', 'SHOOT')[cho])
         return list
 
     def norm(self, x):

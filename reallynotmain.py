@@ -156,8 +156,8 @@ class PPOAgent:
         # self.action_size = self.env.action_space.n
         # self.state_size = self.env.observation_space.shape
         self.env = Space_Ship_Enviroment()
-        self.action_size = 4
-        self.state_size = (4 + 16,)
+        self.action_size = 5
+        self.state_size = (4 + 8 * 2 * 2 + 4 + 1,)
         self.EPISODES = 10000  # total episodes to train through all environments
         self.episode = 0  # used to track the episodes total count of episodes played through all thread environments
         self.max_average = 0  # when average score is above 0 model will be saved
